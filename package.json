@@ -1,0 +1,42 @@
+{
+  "name": "morphological_metrics",
+  "version": "1.0.0",
+  "description": "A TypeScript implementation of Larry Polansky's Morphological Metrics",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jon-myers/morphological_metrics.git"
+  },
+  "keywords": [
+    "music",
+    "theory",
+    "morphology"
+  ],
+  "author": "Jon Myers",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/jon-myers/morphological_metrics/issues"
+  },
+  "homepage": "https://github.com/jon-myers/morphological_metrics#readme",
+  "devDependencies": {
+    "jest": "^29.6.2",
+    "ts-jest": "^29.1.1"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "transform": {
+      "node_modules/variables/.+\\.(j|t)sx?$": "ts-jest"
+    },
+    "transformIgnorePatterns": [
+      "node_modules/(?!variables/.*)"
+    ]
+  },
+  "dependencies": {
+    "@types/jest": "^29.5.3",
+    "@types/node": "^20.5.0"
+  }
+}
