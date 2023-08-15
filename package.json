@@ -23,7 +23,9 @@
   "homepage": "https://github.com/jon-myers/morphological_metrics#readme",
   "devDependencies": {
     "jest": "^29.6.2",
-    "ts-jest": "^29.1.1"
+    "lodash": "^4.17.21",
+    "ts-jest": "^29.1.1",
+    "typescript": "^5.1.6"
   },
   "jest": {
     "preset": "ts-jest",
