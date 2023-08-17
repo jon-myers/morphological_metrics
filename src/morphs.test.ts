@@ -86,6 +86,102 @@ describe('Morph', () => {
     const m = new Morph([0, 2, 5, 4, 1]);
     const n = new Morph([4, 5, 4, 3, 2]);
     const mm = new MorphologicalMetric([m, n]);
+    expect(mm.OLMGeneral({ delta: delta.intervalClass })).toEqual(1.25);
   })
 
+  test('Generate intervals', () => {
+    const m = new Morph([0, 2, 5, 4, 1]);
+    const comb = m.generateIntervals({ form: 'combinatorial interval' });
+    const combAns = [
+      [0, 2], [0, 5], [0, 4], [0, 1], [2, 5], 
+      [2, 4], [2, 1], [5, 4], [5, 1], [4, 1]
+    ];
+    expect(comb).toEqual(combAns);
+    const adj1 = m.generateIntervals({ form: 'adjacency interval' });
+    const adj1Ans = [[0, 2], [2, 5], [5, 4], [4, 1]];
+    expect(adj1).toEqual(adj1Ans);
+    const adj2 = m.generateIntervals({ 
+      form: 'adjacency interval', 
+      adjacencyInterval: 2 
+    });
+    const adj2Ans = [[0, 5], [2, 4], [5, 1]];
+    expect(adj2).toEqual(adj2Ans);
+    const fIdx = m.generateIntervals({ 
+      form: 'fundamental index',
+      fundamentalIndex: 2
+    })
+    const fIdxAns = [[0, 5], [2, 5], [5, 5], [4, 5], [1, 5]];
+    expect(fIdx).toEqual(fIdxAns);
+    const fVal = m.generateIntervals({
+      form: 'fundamental value',
+      fundamentalValue: 7
+    });
+    const fValAns = [[0, 7], [2, 7], [5, 7], [4, 7], [1, 7]];
+    expect(fVal).toEqual(fValAns);
+    const fMean = m.generateIntervals({
+      form: 'mean fundamental value'
+    });
+    const fMeanAns = [[0, 2.4], [2, 2.4], [5, 2.4], [4, 2.4], [1, 2.4]];
+    expect(fMean).toEqual(fMeanAns);
+    const fMax = m.generateIntervals({ form: 'max fundamental value' });
+    const fMaxAns = [[0, 5], [2, 5], [5, 5], [4, 5], [1, 5]];
+    expect(fMax).toEqual(fMaxAns);
+  })
+
+  test('Direction Interval', () => {
+    const m = new Morph([0, 2, 5, 4, 1]);
+    const diAns = [-1, -1, 1, 1];
+    expect(m.directionInterval).toEqual(diAns);
+  })
+
+  test('ULD', () => {
+    const m = new Morph([5, 9, 3, 2]);
+    const n = new Morph([2, 5, 6, 6]);
+    const mm = new MorphologicalMetric([m, n]);
+    expect(mm.ULD()).toEqual(2/3);
+  })
+
+  test('ULD vs OLD', () => {
+    // Polansky, 1996, pg. 313
+    const o = new Morph([5, 3, 6, 1, 4]);
+    const p = new Morph([3, 6, 1, 4, 2]);
+    const mm = new MorphologicalMetric([o, p]);
+    expect(mm.OLD()).toEqual(1);
+    expect(mm.ULD()).toEqual(0);
+  })
+
+  test('OCD', () => {
+    const m = new Morph([5, 9, 3, 2]);
+    const n = new Morph([2, 5, 6, 6]);
+    const mm = new MorphologicalMetric([m, n]);
+    expect(mm.OCD()).toBeCloseTo(5/6, 8);
+    const o = new Morph([5, 3, 6, 1, 4]);
+    const p = new Morph([3, 6, 1, 4, 2]);
+    const mm2 = new MorphologicalMetric([o, p]);
+    expect(mm2.OCD()).toEqual(0.8)
+  })
+
+  test('ccv', () => {
+    // pg. 315
+    const o = new Morph([5, 3, 6, 1, 4]);
+    const p = new Morph([3, 6, 1, 4, 2]);
+    expect(o.combinatorialContourVector).toEqual([4, 0, 6]);
+    expect(p.combinatorialContourVector).toEqual([4, 0, 6]);
+  })
+
+  test('UCD + ccv', () => {
+    // pg. 315
+    const q = new Morph([5, 3, 7, 6]);
+    const r = new Morph([2, 1, 2, 1]);
+    const s = new Morph([8, 3, 5, 4]);
+    expect(q.combinatorialContourVector).toEqual([4, 0, 2]);
+    expect(r.combinatorialContourVector).toEqual([1, 2, 3]);
+    expect(s.combinatorialContourVector).toEqual([2, 0, 4]);
+    const mmQR = new MorphologicalMetric([q, r]);
+    const mmRS = new MorphologicalMetric([r, s]);
+    const mmQS = new MorphologicalMetric([q, s]);
+    expect(mmQR.UCD()).toEqual(0.5);
+    expect(mmRS.UCD()).toEqual(1/3);
+    expect(mmQS.UCD()).toEqual(1/3);
+  })
 })

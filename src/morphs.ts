@@ -8,16 +8,23 @@ const mod = (n: number, m: number) => {
   return ((n % m) + m) % m;
 }
 
-type LinearContourVector = [number, number, number];
+// Polansky, 1996, pg. 307
+const Lm = (l: number) => { // number of pairwise relationships
+  return (l ** 2 - l) / 2;
+}
+
+// Polanksy, 1996, pg. 307 - 308
+const degOfComb = (numIntervals: number, morphLen: number) => {
+  return numIntervals / Lm(morphLen);
+} 
+
+type ContourVector = [number, number, number];
 
 class Morph {
   data: number[];
 
   constructor(data: number[]) {
-
     this.data = data;
-    
-
     if (this.data.length < 2) {
       throw new Error('Arrays must have at least 2 elements');
     }
@@ -56,8 +63,14 @@ class Morph {
     return this.derivate(2, true)
   }
 
-  get linearContourVector() {
-    const lcv: LinearContourVector = [0, 0, 0];
+  // Polansky, 1996, pg. 312
+  get directionInterval(): (-1 | 0 | 1)[] {
+    return this.data.slice(1).map((d, i) => delta.sgn(this.data[i], d))
+  }
+
+  get linearContourVector() { // also sometimes called "direction vector": see 
+    // Polansky, 1996, pg. 312
+    const lcv: ContourVector = [0, 0, 0];
     this.derivate(1).forEach(ai => {
       if (ai > 0) {
         lcv[0] += 1;
@@ -69,7 +82,79 @@ class Morph {
     })
     return lcv;
   }
+
+  get combinatorialContourVector() {
+    const ccv: ContourVector = [0, 0, 0];
+    const ints = this.generateIntervals({ form: 'combinatorial interval' });
+    ints.forEach(([a, b]) => {
+      const delta = b - a;
+      if (delta > 0) {
+        ccv[0] += 1;
+      } else if (delta === 0) {
+        ccv[1] += 1;
+      } else {
+        ccv[2] += 1;
+      }
+    });
+    return ccv;
+  }
+
+  // Polansky 1996, pg. 304
+  generateIntervals({
+    form = 'adjacency interval',
+    adjacencyInterval = 1,
+    fundamentalValue = undefined,
+    fundamentalIndex = undefined,
+  }: {
+    form?: IntervalIndexForm,
+    adjacencyInterval?: number,
+    fundamentalValue?: number,
+    fundamentalIndex?: number
+  }) {
+    let out: [number, number][] = [];
+    if (form === 'adjacency interval') {
+      for (let i = 0; i < this.data.length - adjacencyInterval; i++) {
+        out.push([this.data[i], this.data[i + adjacencyInterval]]);
+      }
+    } else if (form === 'fundamental index') {
+      if (fundamentalIndex === undefined) {
+        throw new Error('Fundamental index must be defined');
+      }
+      if (fundamentalIndex > this.data.length - 1) {
+        throw new Error('Fundamental index must be less than the array length');
+      }
+      out = this.data.map(n => [n, this.data[fundamentalIndex]])
+    } else if (form === 'fundamental value') {
+      if (fundamentalValue === undefined) {
+        throw new Error('Fundamental value must be defined');
+      }
+      out = this.data.map(n => [n, fundamentalValue])
+    } else if (form === 'mean fundamental value') {
+      const mean = this.data.reduce((a, b) => a + b, 0) / this.data.length;
+      out = this.data.map(n => [n, mean])
+    } else if (form === 'max fundamental value') {
+      const max = Math.max(...this.data);
+      out = this.data.map(n => [n, max])
+    } else if (form === 'combinatorial interval') {
+      // Polansky, pg. 305 general combinatorial form
+      for (let i = 0; i < this.data.length - 1; i++) {
+        for (let j = i + 1; j < this.data.length; j++) {
+          out.push([this.data[i], this.data[j]])
+        }
+      }
+    }
+    return out;
+  }
 }
+
+type IntervalIndexForm = (
+  'adjacency interval' | 
+  'fundamental index' |
+  'fundamental value' |
+  'mean fundamental value' |
+  'max fundamental value' |
+  'combinatorial interval'
+)
 
 class MorphologicalMetric {
   morphs: [Morph, Morph];
@@ -92,10 +177,12 @@ class MorphologicalMetric {
   // it should be `OLM, no delta^2 (2nd order) = (4 ^ 0.5 + 3 ^ 0.5) / 3 = ~1.244`
   OLM({
     squared = false,
-    order = 1
+    order = 1,
+    verbose = false
   }: {
     squared?: boolean,
-    order?: number
+    order?: number,
+    verbose?: boolean
   } = {}) { // ordered linear magnitude
     if (!this.ordered) {
       throw new Error('Morphs must be ordered for OLM');
@@ -111,7 +198,8 @@ class MorphologicalMetric {
         return Math.abs(Math.abs(m) - Math.abs(n));
       }
     };
-    const out = m.derivate(order, true).map((mDelta, i) => {
+    const mDeriv = m.derivate(order, true);
+    const out = mDeriv.map((mDelta, i) => {
       const nDelta = n.derivate(order, true)[i];
       const difference = diff(mDelta, nDelta);
       return difference
@@ -185,7 +273,7 @@ class MorphologicalMetric {
     delta = (a: number, b: number) => Math.abs(a - b),
     order = 1
   }: {
-    delta?: (a: number | PitchClassType, b: number | PitchClassType) => number,
+    delta?: (a: number, b: number) => number,
     order?: number
   } = {}) {
     const [m, n] = this.morphs;
@@ -196,39 +284,209 @@ class MorphologicalMetric {
     }).reduce((a, b) => a + b, 0);
     return out / mDeriv.length;
   }
+
+  // Polansky, 1996. 303 - 304 (needs to be tested)
+  OLMMetaInterval({ // ordered linear magnitude metric, meta-interval form
+    psi = (a: number, b: number): number => Math.abs(a - b),
+    delta = (a: number, b: number): number => Math.abs(a - b),
+  }: {
+    psi?: (a: number, b: number) => number,
+    delta?: (a: number, b: number) => number
+  }={}) {
+    const [m, n] = this.morphs;
+    const mDeriv = m.derivate(1, true);
+    const nDeriv = n.derivate(1, true);
+    let maxInt = 0;
+    let out = mDeriv.map((_, i) => {
+      const mDelta = delta(mDeriv[i], mDeriv[i+1]);
+      const nDelta = delta(nDeriv[i], nDeriv[i + 1]);
+      maxInt = Math.max(maxInt, mDelta, nDelta);
+      return psi(mDelta, nDelta);
+    })
+    return out.reduce((a, b) => a + b, 0) / (out.length * maxInt);
+  }
+
+  // Polansky, 1996, pg. 304, needs to be tested
+  ULMMetaInterval({ // unordered linear magnitude metric, meta-interval form
+    psi = (a: number, b: number): number => Math.abs(a - b),
+    delta = (a: number, b: number): number => Math.abs(a - b),
+  }: {
+    psi?: (a: number, b: number) => number,
+    delta?: (a: number, b: number) => number
+  } = {}) {
+    const [m, n] = this.morphs;
+    const mDeriv = m.data.slice(1).map((x, i) => delta(x, m.data[i]));
+    const mSum = mDeriv.reduce((a, b) => a + b, 0);
+    const mNormed = mSum / mDeriv.length;
+    const nDeriv = n.data.slice(1).map((x, i) => delta(x, n.data[i]));
+    const nSum = nDeriv.reduce((a, b) => a + b, 0);
+    const nNormed = nSum / nDeriv.length;
+    return psi(mNormed, nNormed);
+  }
+
+
+  // Polansky, 1996, pg. 305
+  OLMGeneralizedInterval({
+    delta = (a: number, b: number) => Math.abs(a - b),
+    psi = (a: number, b: number) => Math.abs(a - b),
+    mIntervalForm = 'adjacency interval',
+    mAdjacencyInterval = 1,
+    mFundamentalValue = undefined,
+    mFundamentalIndex = undefined,
+    nIntervalForm = 'adjacency interval',
+    nAdjacencyInterval = 1,
+    nFundamentalValue = undefined,
+    nFundamentalIndex = undefined
+  }: {
+    delta?: (a: number, b: number) => number,
+    psi?: (a: number, b: number) => number,
+    mIntervalForm?: IntervalIndexForm,
+    mAdjacencyInterval?: number,
+    mFundamentalValue?: number,
+    mFundamentalIndex?: number,
+    nIntervalForm?: IntervalIndexForm,
+    nAdjacencyInterval?: number,
+    nFundamentalValue?: number,
+    nFundamentalIndex?: number
+  } = {}) {
+    const [m, n] = this.morphs;
+    let maxInt = 0;
+    const mIntervals = m.generateIntervals({
+      form: mIntervalForm,
+      adjacencyInterval: mAdjacencyInterval,
+      fundamentalValue: mFundamentalValue,
+      fundamentalIndex: mFundamentalIndex
+    });
+    const nIntervals = n.generateIntervals({
+      form: nIntervalForm,
+      adjacencyInterval: nAdjacencyInterval,
+      fundamentalValue: nFundamentalValue,
+      fundamentalIndex: nFundamentalIndex
+    });
+    if (mIntervals.length !== nIntervals.length) {
+      throw new Error('Intervals must be of equal length');
+    }
+    mIntervals.forEach(mInt => {
+      maxInt = Math.max(maxInt, mInt[0], mInt[1])
+    });
+    nIntervals.forEach(nInt => {
+      maxInt = Math.max(maxInt, nInt[0], nInt[1])
+    });
+    const psiVals = mIntervals.map((mInt, i) => {
+      const nInt = nIntervals[i];
+      const mDelta = delta(mInt[0], mInt[1]);
+      const nDelta = delta(nInt[0], nInt[1]);
+      return psi(mDelta, nDelta);
+    });
+    return psiVals.reduce((a, b) => a + b, 0) / (psiVals.length * maxInt);
+  }
+
+  // unordered linear direction
+  // Polansky, 1996, pg. 311 - 312
+  ULD({ verbose = false }: { verbose?: boolean } = {}) {
+    const [m, n] = this.morphs;
+    const mDirVec = m.linearContourVector;
+    const nDirVec = n.linearContourVector;
+    const diffs = mDirVec.map((mDir, i) => Math.abs(mDir - nDirVec[i]))
+    const sum = diffs.reduce((a, b) => a + b, 0);
+    const grain = 1 / ((m.data.length - 1)* 2);
+    if (verbose) {
+      return {
+        value: sum * grain,
+        grain
+      }
+    }
+    return sum * grain;
+  }
+
+  // Ordered Linear Direction
+  // Polansky, 1996, pg. 312 - 313
+  // "The OLD measures the percentage of different contour values between 
+  // corresponding linear intervals."
+
+  OLD({ verbose = false }: { verbose?: boolean } = {}) {
+    const [m, n] = this.morphs;
+    const mDI = m.directionInterval;
+    const nDI = n.directionInterval;
+
+    const diffs = mDI.map((mDir, i) => delta.diff(mDir, nDI[i]));
+    const sum = diffs.reduce((a, b) => a + b, 0);
+    const grain = 1 / (m.data.length - 1);
+    if (verbose) {
+      return { value: sum * grain, grain }
+    } else {
+      return sum * grain;
+    }
+  }
+
+  // Ordered Combinatorial Direction
+  // Polansky, 1996, pg. 313 - 314
+  OCD({ verbose = false }: { verbose?: boolean } = {}) {
+    const [m, n] = this.morphs;
+    const mInts = m.generateIntervals({ form: 'combinatorial interval' });
+    const nInts = n.generateIntervals({ form: 'combinatorial interval' });
+    const mSgns = mInts.map(mInt => delta.sgn(mInt[0], mInt[1]));
+    const nSgns = nInts.map(nInt => delta.sgn(nInt[0], nInt[1]));
+    const diffs = mSgns.map((mSgn, i) => delta.diff(mSgn, nSgns[i]));
+    const sum = diffs.reduce((a, b) => a + b, 0);
+    const grain = 1 / Lm(m.data.length);
+    if (verbose) {
+      return { value: sum * grain, grain }
+    } else {
+      return sum * grain;
+    }
+  }
+
+  // Unordered Combinatorial Direction
+  // Polansky, 1996, pg. 314 - 315
+  UCD({ verbose = false }: { verbose?: boolean } = {}) {
+    const [m, n] = this.morphs;
+    const mVec = m.combinatorialContourVector;
+    const nVec = n.combinatorialContourVector;
+    const diffs = mVec.map((mVal, i) => Math.abs(mVal - nVec[i]));
+    const sum = diffs.reduce((a, b) => a + b, 0);
+    const grain = 1 / (Lm(m.data.length) * 2);
+    if (verbose) {
+      return { value: sum * grain, grain }
+    } else {
+      return sum * grain;
+    }
+  }
+
+  
 }
 
-type PitchClassType = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
-type IntervalClassType = 0 | 1 | 2 | 3 | 4 | 5 | 6;
-
 const delta = {
-  intervalClass: (a: PitchClassType, b: PitchClassType): IntervalClassType => {
-    return Math.min(mod(a - b, 12), mod(b - a, 12)) as IntervalClassType;
+  intervalClass: (a: number, b: number): number => {
+    return Math.min(mod(a - b, 12), mod(b - a, 12));
+  },
+  absoluteValue: (a: number, b: number): number => {
+    return Math.abs(a - b);
+  },
+  ratio: (a: number, b: number): number => {
+    return a / b;
+  },
+  squaredDiff: (a: number, b: number): number => {
+    return (a - b) ** 2;
+  },
+  // Polansky, 1996, pg. 311
+  sgn: (a: number, b: number): -1 | 0 | 1 => {
+    if (a > b) { // goes down
+      return 1
+    } else if (a === b) { // stays the same
+      return 0
+    } else { // goes up
+      return -1
+    }
+  },
+
+  diff: (a: -1 | 0 | 1, b: -1 | 0 | 1): number => {
+    return Number(a !== b);
   }
 }
 
 
 
 
-// class Delta {
-//   comparands: [number, number];
-//   type: (
-//     'absolute value' | 
-//     'ratio' | 
-//     'max of function' | 
-//     'squared difference' | 
-//     'root of squared difference'
-//   );
-// }
-
-// const m = new Morph([0, 2, 4, 1, 0]);
-// const n = new Morph([2, 3, 0, 4, 1]);
-
-// const ai = m.firstOrderAbsoluteInterval;
-// console.log(ai)
-
-
-
-
-
 export { Morph, MorphologicalMetric, delta }
+
