@@ -184,4 +184,46 @@ describe('Morph', () => {
     expect(mmRS.UCD()).toEqual(1/3);
     expect(mmQS.UCD()).toEqual(1/3);
   })
+
+  test('ULD and UCD unequal length form', () => {
+    const m = new Morph([5, 9, 3, 2]);
+    const n = new Morph([2, 5, 6, 6]);
+    const o = new Morph([5, 3, 6, 1, 4]);
+    const p = new Morph([3, 6, 1, 4, 2]);
+    const mm_mo = new MorphologicalMetric([m, o], false);
+    const moAns = (0.5 - 1/3 + 2/3  - 1/2) / 2;
+    expect(mm_mo.ULDUnequalLengthForm()).toBeCloseTo(moAns, 8);
+    const mm_no = new MorphologicalMetric([n, o], false);
+    expect(mm_no.ULDUnequalLengthForm()).toEqual(0.5);
+    const mo_ans_ucd = ((.4 - 1/6) + (5/6 - 3/5))/2;
+    expect(mm_mo.UCDUnequalLengthForm()).toBeCloseTo(mo_ans_ucd, 8);
+    const no_ans_ucd = 0.6; // this diverges from the answer LP provides on page 
+    // 316, but I think it's a typo. The answer should be 0.6, not 0.5.
+    expect(mm_no.UCDUnequalLengthForm()).toBeCloseTo(no_ans_ucd, 8);
+  })
+  //   const mm = new MorphologicalMetric([m, n]);
+  //   expect(mm.ULD()).toEqual(2/3);
+  // })
+
+  test('Morris Ranking', () => {
+    const m = new Morph([1, 3, 7, 2, 5]);
+    const n = new Morph([1, 3, 7, 12, 9]);
+    const o = new Morph([5, 3, 6, 1, 4]);
+    expect(m.morrisRanking).toEqual([1, 3, 5, 2, 4]);
+    expect(n.morrisRanking).toEqual([1, 2, 3, 5, 4]);
+    expect(o.morrisRanking).toEqual([4, 2, 5, 1, 3]);
+  })
+
+  test('CombinatorialMagnitudeMatrix', () => {
+    const m  = new Morph([5, 3, 2, 6, 9]);
+    const n = new Morph([5, 7, 8, 4, 1]);
+    const cmm = [
+      [2, 3, 1, 4], 
+      [1, 3, 6], 
+      [4, 7], 
+      [3]
+    ];
+    expect(m.combinatorialMagnitudeMatrix).toEqual(cmm);
+    expect(n.combinatorialMagnitudeMatrix).toEqual(cmm);
+  })
 })

@@ -145,6 +145,33 @@ class Morph {
     }
     return out;
   }
+
+  get morrisRanking() {
+    // Polansky, note 55, pg. 362
+    // An equivalent notation for the contour of these three morphologies, 
+    // using Morris' "ranking" method, is A/= {2143}, N= {2121} and O = {4132}. 
+    // In this method, each element in the morphology is represented in order by 
+    // the ranking vector by a number representing its "rank" from least to 
+    // greatest. If all values are equal, the vector consists of 1s. In a 
+    // strictly monotonically increasing morphology, the vector goes from 1 to 
+    // L.
+    const sorted = this.data.slice().sort((a, b) => a - b);
+    return this.data.map((n) => sorted.indexOf(n) + 1);
+  }
+
+  get combinatorialMagnitudeMatrix() {
+    // Polansky, 1996 pg 318
+    const magMatrix: number[][] = [];
+    for (let i = 0; i < this.data.length - 1; i++) {
+      const row = [];
+      for (let j = i + 1; j < this.data.length; j++) {
+        const [a, b] = [this.data[i], this.data[j]];
+        row.push(Math.abs(a - b));
+      }
+      magMatrix.push(row);
+    }
+    return magMatrix;
+  }
 }
 
 type IntervalIndexForm = (
@@ -453,7 +480,31 @@ class MorphologicalMetric {
     }
   }
 
-  
+  // Unordered Linear Direction, Unequal Length Form
+  // Polansky, 1996, pg. 315 - 316
+  ULDUnequalLengthForm() {
+    const [m, n] = this.morphs;
+    const mDirVec = m.linearContourVector;
+    const nDirVec = n.linearContourVector;
+    const mNormed = mDirVec.map(mDir => mDir / (m.data.length - 1));
+    const nNormed = nDirVec.map(nDir => nDir / (n.data.length - 1));
+    const diffs = mNormed.map((mDir, i) => Math.abs(mDir - nNormed[i]))
+    const sum = diffs.reduce((a, b) => a + b, 0);
+    return sum / 2;
+  }
+
+  // Unordered Combinatorial Direction, Unequal Length Form
+  // Polansky, 1996, pg. 315 - 316
+  UCDUnequalLengthForm() {
+    const [m, n] = this.morphs;
+    const mVec = m.combinatorialContourVector;
+    const nVec = n.combinatorialContourVector;
+    const mNormed = mVec.map(mVal => mVal / Lm(m.data.length));
+    const nNormed = nVec.map(nVal => nVal / Lm(n.data.length));
+    const diffs = mNormed.map((mVal, i) => Math.abs(mVal - nNormed[i]))
+    const sum = diffs.reduce((a, b) => a + b, 0);
+    return sum / 2;
+  }
 }
 
 const delta = {
