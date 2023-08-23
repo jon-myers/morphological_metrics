@@ -99,6 +99,25 @@ class Morph {
     return ccv;
   }
 
+  intervalVariance({
+    delta = (a: number, b: number) => Math.abs(a - b),
+  }: {
+    delta?: (a: number, b: number) => number
+  } = {}) {
+    // Polansky, 1996, pg. 329
+    const ints = this.generateIntervals();
+    const mean = ints.reduce((a, b) => a + delta(b[0], b[1]), 0) / ints.length;
+    // console.log(ints, mean)
+    let diffs = ints.map(([a, b]) => (delta(a, b) - mean) ** 2);
+    // const diffs = this.data.map(val => {
+    //   return delta(val, mean) ** 2 / (this.data.length - 1);
+    // })
+    // console.log(diffs)
+    diffs = diffs.map(diff => diff / (this.data.length - 1));
+    const sum = diffs.reduce((a, b) => a + b, 0);
+    return sum
+  }
+
   // Polansky 1996, pg. 304
   generateIntervals({
     form = 'adjacency interval',
@@ -110,7 +129,7 @@ class Morph {
     adjacencyInterval?: number,
     fundamentalValue?: number,
     fundamentalIndex?: number
-  }) {
+  } = {}) {
     let out: [number, number][] = [];
     if (form === 'adjacency interval') {
       for (let i = 0; i < this.data.length - adjacencyInterval; i++) {
@@ -202,7 +221,7 @@ class MorphologicalMetric {
   // an absolute value function, otherwise the result is sometimes imaginary.
   // Also, the example of the OLM sqaured form (pg 301), 2nd order is incorrect: 
   // it should be `OLM, no delta^2 (2nd order) = (4 ^ 0.5 + 3 ^ 0.5) / 3 = ~1.244`
-  OLM({
+  OLMOriginal({
     squared = false,
     order = 1,
     verbose = false
@@ -505,6 +524,350 @@ class MorphologicalMetric {
     const sum = diffs.reduce((a, b) => a + b, 0);
     return sum / 2;
   }
+
+  // Polansky, 1996, pg. 318 - 319 (eventually, this should just replace
+  // the normal OLM above ... not sure why LP repeated himself)
+  OLMCanonical({
+    delta = (a: number, b: number) => Math.abs(a - b),
+  }: {
+    delta?: (a: number, b: number) => number
+  } = {}) {
+    const [m, n] = this.morphs;
+    const mDeltas = m.data.slice(1).map((x, i) => delta(m.data[i], x));
+    const nDeltas = n.data.slice(1).map((x, i) => delta(n.data[i], x));
+    const diffs = mDeltas.map((mDelta, i) => Math.abs(mDelta - nDeltas[i]));
+    const sum = diffs.reduce((a, b) => a + b, 0);
+    return sum / (m.data.length - 1);
+  }
+
+
+  // Polansky, 1996, pg. 319
+  OLMScaled({
+    delta = (a: number, b: number) => Math.abs(a - b),
+  }: {
+    delta?: (a: number, b: number) => number
+  } = {}) {
+    const [m, n] = this.morphs;
+    let maxInt = 0;
+    const mDeltas = m.data.slice(1).map((x, i) => {
+      const out = delta(m.data[i], x);
+      maxInt = Math.max(maxInt, out);
+      return out
+    });
+    const nDeltas = n.data.slice(1).map((x, i) => {
+      const out = delta(n.data[i], x);
+      maxInt = Math.max(maxInt, out);
+      return out
+    });
+    const diffs = mDeltas.map((mDelta, i) => Math.abs(mDelta - nDeltas[i]));
+    const sum = diffs.reduce((a, b) => a + b, 0);
+    return sum / ((m.data.length - 1) * maxInt);
+  }
+
+  // Polansky, 1996, pg. 320
+  ULM({
+    delta = (a: number, b: number) => Math.abs(a - b),
+    scaling = 'none'
+  }: {
+    delta?: (a: number, b: number) => number,
+    scaling?: 'none' | 'absolute' | 'relative'
+  } = {}) {
+
+    if (scaling === 'none') {
+      const [m, n] = this.morphs;
+      const mDeltas = m.data.slice(1).map((x, i) => delta(m.data[i], x));
+      const mSum = mDeltas.reduce((a, b) => a + b, 0);
+      const mNormed = mSum / mDeltas.length;
+      const nDeltas = n.data.slice(1).map((x, i) => delta(n.data[i], x));
+      const nSum = nDeltas.reduce((a, b) => a + b, 0);
+      const nNormed = nSum / nDeltas.length;
+      return Math.abs(mNormed - nNormed);
+    } else if (scaling === 'relative') {
+      return this.ULMRelativeScaling({ delta });
+    } else if (scaling === 'absolute') {
+      return this.ULMAbsoluteScaling({ delta });
+    }
+    
+  }
+
+  // Polansky, 1996, pg. 321
+
+  ULMAbsoluteScaling({
+    delta = (a: number, b: number) => Math.abs(a - b),
+  }: {
+    delta?: (a: number, b: number) => number
+  } = {}) {
+    const [m, n] = this.morphs;
+    let maxInt = 0;
+    const mDeltas = m.data.slice(1).map((x, i) => {
+      const out = delta(m.data[i], x);
+      maxInt = Math.max(maxInt, out);
+      return out
+    });
+    const nDeltas = n.data.slice(1).map((x, i) => {
+      const out = delta(n.data[i], x);
+      maxInt = Math.max(maxInt, out);
+      return out
+    });
+    const mSum = mDeltas.reduce((a, b) => a + b, 0);
+    const mNormed = mSum / mDeltas.length;
+    const nSum = nDeltas.reduce((a, b) => a + b, 0);
+    const nNormed = nSum / nDeltas.length;
+    const preScaled = Math.abs(mNormed - nNormed);
+    return preScaled / maxInt;
+  }
+
+  // Polansky, 1996, pg. 321 - 322
+  ULMRelativeScaling({
+    delta = (a: number, b: number) => Math.abs(a - b),
+  }: {
+    delta?: (a: number, b: number) => number
+  } = {}) {
+    const [m, n] = this.morphs;
+    let mMaxint = 0;
+    const mDeltas = m.data.slice(1).map((x, i) => {
+      const out = delta(m.data[i], x);
+      mMaxint = Math.max(mMaxint, out);
+      return out
+    });
+    const mSum = mDeltas.reduce((a, b) => a + b, 0);
+    const mNormed = mSum / (mDeltas.length * mMaxint);
+    let nMaxint = 0;
+    const nDeltas = n.data.slice(1).map((x, i) => {
+      const out = delta(n.data[i], x);
+      nMaxint = Math.max(nMaxint, out);
+      return out
+    });
+    const nSum = nDeltas.reduce((a, b) => a + b, 0);
+    const nNormed = nSum / (nDeltas.length * nMaxint);
+    return Math.abs(mNormed - nNormed);
+  }
+
+  // Polansky, 1996, pg. 322
+  OLMRelativeScaling({
+    delta = (a: number, b: number) => Math.abs(a - b),
+  }: {
+    delta?: (a: number, b: number) => number
+  } = {}) {
+    const [m, n] = this.morphs;
+    let mMaxInt = 0;
+    const mDeltas = m.data.slice(1).map((x, i) => {
+      const out = delta(m.data[i], x);
+      mMaxInt = Math.max(mMaxInt, out);
+      return out
+    })
+    const normedMDeltas = mDeltas.map(mDelta => mDelta / mMaxInt);
+    let nMaxInt = 0;
+    const nDeltas = n.data.slice(1).map((x, i) => {
+      const out = delta(n.data[i], x);
+      nMaxInt = Math.max(nMaxInt, out);
+      return out
+    });
+    const normedNDeltas = nDeltas.map(nDelta => nDelta / nMaxInt);
+    const diffs = normedMDeltas.map((mDelta, i) => Math.abs(mDelta - normedNDeltas[i]));
+    const sum = diffs.reduce((a, b) => a + b, 0);
+    return sum / mDeltas.length;
+  }
+
+  OLM({
+    scaling = 'none',
+    delta = (a: number, b: number) => Math.abs(a - b),
+  }: {
+    scaling?: 'none' | 'absolute' | 'relative',
+    delta?: (a: number, b: number) => number
+  } = {}) {
+    if (scaling === 'none') {
+      return this.OLMCanonical({ delta });
+    } else if (scaling === 'relative') {
+      return this.OLMRelativeScaling({ delta });
+    } else if (scaling === 'absolute') {
+      return this.OLMScaled({ delta });
+    }
+  }
+
+
+  // Polansky, 1996, pg. 323
+  // Ordered combinatorial magnitude metric
+  // the squared form, at least as written out in the paper, is the exact same
+  // as the absolute scaled ... not sure if this is a typo or what
+  OCM({
+    delta = (a: number, b: number) => Math.abs(a - b),
+    scaling = 'none',
+    
+  }: {
+    delta?: (a: number, b: number) => number,
+    scaling?: 'none' | 'absolute' | 'relative',
+  } = {}) {
+    const [m, n] = this.morphs;
+    const mInts = m.generateIntervals({ form: 'combinatorial interval' });
+    const nInts = n.generateIntervals({ form: 'combinatorial interval' });
+    let maxInt = 0, mMaxInt = 0, nMaxInt = 0;
+    const mDeltas = mInts.map(mInt => {
+      const out = delta(mInt[0], mInt[1]);
+      if (scaling === 'absolute') {
+        maxInt = Math.max(maxInt, out);
+      } else if (scaling === 'relative') {
+        mMaxInt = Math.max(mMaxInt, out);
+      }
+      return out
+    });
+    const nDeltas = nInts.map(nInt => {
+      const out = delta(nInt[0], nInt[1]);
+      if (scaling === 'absolute') {
+        maxInt = Math.max(maxInt, out);
+      } else if (scaling === 'relative') {
+        nMaxInt = Math.max(nMaxInt, out);
+      }
+      return out
+    });
+    const diffs = mDeltas.map((mDelta, i) => {
+      let mDelt, nDelt;
+      if (scaling === 'relative') {
+        mDelt = mDelta / mMaxInt;
+        nDelt = nDeltas[i] / nMaxInt;
+      } else {
+        mDelt = mDelta;
+        nDelt = nDeltas[i];
+      }
+
+      return Math.abs(mDelt - nDelt);
+    });
+    const sum = diffs.reduce((a, b) => a + b, 0);
+    const out = sum / Lm(m.data.length);
+    if (scaling === 'absolute') {
+      return out / maxInt;
+    } else {
+      return out
+    }
+  }
+
+
+  // Polansky, 1996, pg. 325
+  UCM({ 
+    delta = (a: number, b: number) => Math.abs(a - b),
+    scaling = 'none',
+  }: {
+    delta?: (a: number, b: number) => number,
+    scaling?: 'none' | 'absolute' | 'relative',
+  } = {}) {
+    const [m, n] = this.morphs;
+    const mInts = m.generateIntervals({ form: 'combinatorial interval' });
+    const nInts = n.generateIntervals({ form: 'combinatorial interval' });
+    let maxInt = 0, mMaxInt = 0, nMaxInt = 0;
+    let mSum = mInts.map(mInt => {
+      const out = delta(mInt[0], mInt[1]);
+      if (scaling === 'absolute') {
+        maxInt = Math.max(maxInt, out);
+      } else if (scaling === 'relative') {
+        mMaxInt = Math.max(mMaxInt, out);
+      }
+      return out
+    }).reduce((a, b) => a + b, 0);
+    let nSum = nInts.map(nInt => {
+      const out = delta(nInt[0], nInt[1]);
+      if (scaling === 'absolute') {
+        maxInt = Math.max(maxInt, out);
+      } else if (scaling === 'relative') {
+        nMaxInt = Math.max(nMaxInt, out);
+      }
+      return out
+    }).reduce((a, b) => a + b, 0);
+    if (scaling === 'relative') {
+      mSum /= mMaxInt;
+      nSum /= nMaxInt;
+    }
+    const out = Math.abs(mSum / mInts.length - nSum / nInts.length);
+    if (scaling === 'absolute') {
+      return out / maxInt;
+    } else {
+      return out
+    }
+  }
+
+  // Polansky, 1996, pg. 327
+  maxULM({
+    delta = (a: number, b: number) => Math.abs(a - b),
+  }: {
+    delta?: (a: number, b: number) => number
+  } = {}) {
+    const [m, n] = this.morphs;
+    const mDeltas = m.data.slice(1).map((x, i) => delta(m.data[i], x));
+    const mMax = Math.max(...mDeltas);
+    const nDeltas = n.data.slice(1).map((x, i) => delta(n.data[i], x));
+    const nMax = Math.max(...nDeltas);
+    return Math.abs(mMax - nMax);
+  }
+
+  // Polansky, 1996, pg. 327
+  maxOLM({
+    delta = (a: number, b: number) => Math.abs(a - b),
+  }: {
+    delta?: (a: number, b: number) => number
+  } = {}) {
+    const [m, n] = this.morphs;
+    const mDeltas = m.data.slice(1).map((x, i) => delta(m.data[i], x));
+    const nDeltas = n.data.slice(1).map((x, i) => delta(n.data[i], x));
+    const diffs = mDeltas.map((mDelta, i) => Math.abs(mDelta - nDeltas[i]));
+    return Math.max(...diffs);
+  }
+
+  // Polansky, 1996, pg. 328
+  maxOCM({
+    delta = (a: number, b: number) => Math.abs(a - b),
+  }: {
+    delta?: (a: number, b: number) => number
+  } = {}) {
+    const [m, n] = this.morphs;
+    const mInts = m.generateIntervals({ form: 'combinatorial interval' });
+    const nInts = n.generateIntervals({ form: 'combinatorial interval' });
+    const mDeltas = mInts.map(mInt => delta(mInt[0], mInt[1]));
+    const nDeltas = nInts.map(nInt => delta(nInt[0], nInt[1]));
+    const diffs = mDeltas.map((mDelta, i) => Math.abs(mDelta - nDeltas[i]));
+    return Math.max(...diffs);
+  }
+
+
+  // Polansky, 1996, pg. 328
+  maxUCM({
+    delta = (a: number, b: number) => Math.abs(a - b),
+  }: {
+    delta?: (a: number, b: number) => number
+  } = {}) {
+    const [m, n] = this.morphs;
+    const mInts = m.generateIntervals({ form: 'combinatorial interval' });
+    const mDeltas = mInts.map(mInt => delta(mInt[0], mInt[1]));
+    const maxM = Math.max(...mDeltas);
+    const nInts = n.generateIntervals({ form: 'combinatorial interval' });
+    const nDeltas = nInts.map(nInt => delta(nInt[0], nInt[1]));
+    const maxN = Math.max(...nDeltas);
+    return Math.abs(maxM - maxN);
+  }
+
+  sigmaULM() {
+    const [m, n] = this.morphs;
+    return Math.abs(m.intervalVariance() ** 0.5 - n.intervalVariance() ** 0.5);
+
+  }
+}
+
+
+// Polansky, 1996, pg. 326
+// correlation coefficient
+// not a metric, since it ranges from -1 to 1
+
+const cc = (x: number[], y: number[]) => {
+  if (x.length !== y.length) {
+    throw new Error('x and y must be the same length');
+  }
+  const xMean = x.reduce((a, b) => a + b, 0) / x.length;
+  const yMean = y.reduce((a, b) => a + b, 0) / y.length;
+  const numeratorAdds = x.map((xVal, i) => (xVal - xMean) * (y[i] - yMean));
+  const numerator = numeratorAdds.reduce((a, b) => a + b, 0);
+  const xDenom = x.map(xVal => (xVal - xMean) ** 2).reduce((a, b) => a + b, 0);
+  const yDenom = y.map(yVal => (yVal - yMean) ** 2).reduce((a, b) => a + b, 0);
+  const denom = (xDenom * yDenom) ** 0.5;
+  return numerator / denom;  
+
 }
 
 const delta = {
@@ -541,3 +904,5 @@ const delta = {
 
 export { Morph, MorphologicalMetric, delta }
 
+// not implemented
+// maxint squared form (pg. 322 - 323)

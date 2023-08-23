@@ -67,19 +67,19 @@ describe('Morph', () => {
     const m = new Morph([0, 2, 4, 1, 0]);
     const n = new Morph([2, 3, 0, 4, 1]);
     const mm = new MorphologicalMetric([m, n]);
-    expect(mm.OLM({ squared: false, order: 1 })).toEqual(1.25);
-    expect(mm.OLM({ squared: false, order: 2 })).toEqual(1);
+    expect(mm.OLMOriginal({ squared: false, order: 1 })).toEqual(1.25);
+    expect(mm.OLMOriginal({ squared: false, order: 2 })).toEqual(1);
     const ans = (3 ** 0.5 + 5 ** 0.5 + 7 ** 0.5 + 8 ** 0.5) / 4;
-    expect(mm.OLM({ squared: true, order: 1 })).toEqual(ans); // ~2.360
+    expect(mm.OLMOriginal({ squared: true, order: 1 })).toEqual(ans); // ~2.360
     const ans2 = (4 ** 0.5 + 3 ** 0.5) / 3;
-    expect(mm.OLM({ squared: true, order: 2 })).toEqual(ans2); // ~1.244
+    expect(mm.OLMOriginal({ squared: true, order: 2 })).toEqual(ans2); // ~1.244
   })
 
   test('OLMGeneral', () => {
     const m = morphGen(10);
     const n = morphGen(10);
     const mm = new MorphologicalMetric([m, n]);
-    expect(mm.OLM({ squared: false, order: 1 })).toEqual(mm.OLMGeneral());
+    expect(mm.OLMOriginal({ squared: false, order: 1 })).toEqual(mm.OLMGeneral());
   })
 
   test('OLMGeneral interval class', () => {
@@ -225,5 +225,97 @@ describe('Morph', () => {
     ];
     expect(m.combinatorialMagnitudeMatrix).toEqual(cmm);
     expect(n.combinatorialMagnitudeMatrix).toEqual(cmm);
+  })
+
+  test('OLM, ULM (again?)', () => {
+    const m = new Morph([1, 6, 2, 5, 11]);
+    const n = new Morph([3, 15, 13, 2, 9]);
+    const mm = new MorphologicalMetric([m, n]);
+    expect(mm.OLMCanonical()).toEqual(4.5);
+    expect(mm.ULM()).toEqual(3.5);
+  })
+
+  test('OCM', () => {
+    const m = new Morph([1, 6, 2, 5, 11]);
+    const n = new Morph([3, 15, 13, 2, 9]);
+    const mm = new MorphologicalMetric([m, n]);
+    expect(mm.OCM()).toEqual(5.2);
+  })
+
+  test('UCM', () => {
+    const m = new Morph([1, 6, 2, 5, 11]);
+    const n = new Morph([3, 15, 13, 2, 9]);
+    const mm = new MorphologicalMetric([m, n]);
+    expect(mm.UCM()).toBeCloseTo(2.4, 8);
+  })
+
+  test('maxULM, maxOLM', () => {
+    const m = new Morph([30, 35, 45, 43]);
+    const n = new Morph([1, 25, 3, 9]);
+    const o = new Morph([30, 31, 28, 33])
+    const mn = new MorphologicalMetric([m, n]);
+    const mo = new MorphologicalMetric([m, o]);
+    const no = new MorphologicalMetric([n, o]);
+    expect(mn.maxULM()).toEqual(14);
+    expect(mn.maxOLM()).toEqual(19);
+    expect(mo.maxULM()).toEqual(5);
+    expect(mo.maxOLM()).toEqual(7);
+    expect(no.maxULM()).toEqual(19);
+    expect(no.maxOLM()).toEqual(23);
+  })
+
+  test('sigma_ulm', () => {
+    const m = new Morph([30, 35, 45, 43]);
+    const n = new Morph([1, 25, 3, 9]);
+    const o = new Morph([30, 31, 28, 33])
+    const mn = new MorphologicalMetric([m, n]);
+    const mo = new MorphologicalMetric([m, o]);
+    const no = new MorphologicalMetric([n, o]);
+    const mivAns = ((2/3) ** 2 + (13/3) ** 2 + (11/3) ** 2) / 3;
+    expect(m.intervalVariance()).toBeCloseTo(mivAns, 8);
+    const nivAns = ((20/3) ** 2 + (14/3) ** 2 + (34/3) ** 2) / 3;
+    expect(n.intervalVariance()).toBeCloseTo(nivAns, 8);
+    const oivAns = 8/3;
+    expect(o.intervalVariance()).toBeCloseTo(oivAns, 8);
+    // const mnAns = (2/3 + 13/3 + 11/3) / 3;
+    // console.log(mnAns)
+    const mnAns = Math.abs(mivAns**0.5 - nivAns**0.5);
+    expect(mn.sigmaULM()).toBeCloseTo(mnAns, 8);
+    const moAns = Math.abs(mivAns**0.5 - oivAns**0.5);
+    expect(mo.sigmaULM()).toBeCloseTo(moAns, 8);
+    const noAns = Math.abs(nivAns**0.5 - oivAns**0.5);
+    expect(no.sigmaULM()).toBeCloseTo(noAns, 8);
+    // console.log(mn.sigmaULM());
+  })
+
+  test('examples from paper', () => {
+    const m = new Morph([1, 5, 12, 2, 9, 6]);
+    const n = new Morph([7, 6, 4, 9, 8, 1]);
+    const mm = new MorphologicalMetric([m, n]);
+    const relAns = (Math.abs(4/10 - 1/7) + 
+      Math.abs(7/10 - 2/7) + 
+      Math.abs(10/10 - 5/7) + 
+      Math.abs(7/10 - 1 / 7) + 
+      Math.abs(3/10 - 7/7)) / 5;
+
+    //olm
+    expect(mm.OLM({ scaling: 'none' })).toEqual(4.6);
+    expect(mm.OLM({ scaling: 'absolute' })).toEqual(0.46);
+    expect(mm.OLM({ scaling: 'relative' })).toEqual(relAns);
+
+    //ocm
+    expect(mm.OCM({ scaling: 'none' })).toEqual(3.6);
+    expect(mm.OCM({ scaling: 'absolute' })).toEqual(54 / (15 * 11));
+    expect(mm.OCM({ scaling: 'relative' })).toBeCloseTo(0.366, 2);
+    
+    // ULM
+    expect(mm.ULM({ scaling: 'none' })).toEqual(3.0);
+    expect(mm.ULM({ scaling: 'absolute' })).toEqual(0.3);
+    expect(mm.ULM({ scaling: 'relative' })).toBeCloseTo(0.1628, 3);
+
+    //UCM
+    expect(mm.UCM({ scaling: 'none' })).toBeCloseTo(1.6, 4);
+    expect(mm.UCM({ scaling: 'absolute' })).toBeCloseTo(0.14545, 4);
+    expect(mm.UCM({ scaling: 'relative' })).toBeCloseTo(0.025, 3);
   })
 })
