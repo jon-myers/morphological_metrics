@@ -902,7 +902,7 @@ const delta = {
 
 
 
-export { Morph, MorphologicalMetric, delta }
+export { Morph, MorphologicalMetric, delta, cc }
 
 // not implemented
 // maxint squared form (pg. 322 - 323)
