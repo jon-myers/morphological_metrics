@@ -1,10 +1,11 @@
 {
-  "name": "morphological_metrics",
+  "name": "morphological-metrics",
   "version": "1.0.0",
   "description": "A TypeScript implementation of Larry Polansky's Morphological Metrics",
   "main": "dist/morphs.js",
   "module": "dist/morphs.mjs",
   "types": "dist/morphs.d.ts",
+  "files": ["dist"],
   "exports": {
     "import": "./dist/morphs.mjs",
     "require": "./dist/morphs.js"
