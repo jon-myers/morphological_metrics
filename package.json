@@ -2,9 +2,16 @@
   "name": "morphological_metrics",
   "version": "1.0.0",
   "description": "A TypeScript implementation of Larry Polansky's Morphological Metrics",
-  "main": "index.js",
+  "main": "dist/morphs.js",
+  "module": "dist/morphs.mjs",
+  "types": "dist/morphs.d.ts",
+  "exports": {
+    "import": "./dist/morphs.mjs",
+    "require": "./dist/morphs.js"
+  },
   "scripts": {
-    "test": "jest"
+    "test": "jest",
+    "build": "tsup src/morphs.ts --dts --format cjs,esm --out-dir dist clean"
   },
   "repository": {
     "type": "git",
@@ -25,7 +32,8 @@
     "jest": "^29.6.2",
     "lodash": "^4.17.21",
     "ts-jest": "^29.1.1",
-    "typescript": "^5.1.6"
+    "tsup": "^8.5.0",
+    "typescript": "^5.8.3"
   },
   "jest": {
     "preset": "ts-jest",
